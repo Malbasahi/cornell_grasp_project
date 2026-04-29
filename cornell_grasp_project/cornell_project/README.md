@@ -130,7 +130,7 @@ pip install -r requirements.txt
 ```
 
 ### 2. Download the Cornell dataset
-
+https://www.kaggle.com/datasets/oneoneliu/cornell-grasp 
 ```bash
 bash scripts/download_cornell.sh
 ```
