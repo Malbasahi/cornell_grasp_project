@@ -1,4 +1,3 @@
-````markdown
 # Occlusion-Robust 2D Grasp Detection on the Cornell Grasping Dataset
 
 **AI7102: Introduction to Deep Learning — Fall 2025**  
