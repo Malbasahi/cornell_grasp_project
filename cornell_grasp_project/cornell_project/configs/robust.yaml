@@ -1,0 +1,53 @@
+# configs/robust.yaml
+# Occlusion-robust grasp detector — depth + occlusion map
+
+experiment:
+  name: "robust"
+  seed: 42
+  output_dir: "checkpoints/robust"
+  log_dir: "logs/robust"
+
+data:
+  root: "data/raw/cornell"
+  split_ratio: [0.9, 0.1]
+  image_size: [480, 640]
+  use_depth_only: false           # depth + occlusion map
+  normalize_depth: true
+  augment_train: true
+  num_workers: 4
+
+  # Occlusion augmentation — ON for robust model
+  occlusion_aug: true
+  occlusion_aug_prob: 0.5         # apply to 50% of training samples
+  occlusion_block_size: [20, 80]  # random block size range (pixels)
+  occlusion_num_blocks: [1, 5]    # number of blocks per image
+  occlusion_map_type: "variance"  # "binary" or "variance"
+  variance_window: 15             # local variance window size
+
+model:
+  name: "robust"
+  input_channels: 2               # depth + occlusion map
+  encoder_channels: [32, 64, 128, 256]
+  decoder_channels: [128, 64, 32]
+  dropout_rate: 0.1
+  # Feature modulation by occlusion map
+  use_occ_modulation: true
+
+training:
+  epochs: 50
+  batch_size: 8
+  learning_rate: 0.001
+  lr_scheduler: "cosine"
+  weight_decay: 0.0001
+  optimizer: "adam"
+  clip_grad_norm: 1.0
+
+loss:
+  quality_weight: 1.0
+  angle_weight: 1.0
+  width_weight: 0.5
+
+evaluation:
+  iou_threshold: 0.25
+  angle_threshold: 30
+  occlusion_levels: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]

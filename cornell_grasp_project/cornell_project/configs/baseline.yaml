@@ -1,0 +1,47 @@
+# configs/baseline.yaml
+# Baseline CNN grasp detector — depth input only
+
+experiment:
+  name: "baseline"
+  seed: 42
+  output_dir: "checkpoints/baseline"
+  log_dir: "logs/baseline"
+
+data:
+  root: "data/raw/cornell"
+  split_ratio: [0.9, 0.1]        # train / val split
+  image_size: [480, 640]          # H x W — full Cornell resolution
+  use_depth_only: true            # depth channel only for baseline
+  normalize_depth: true
+  augment_train: true             # random flip + rotate during training
+  num_workers: 4
+
+  # Occlusion augmentation — OFF for baseline
+  occlusion_aug: false
+
+model:
+  name: "baseline"
+  input_channels: 1               # depth only
+  encoder_channels: [32, 64, 128, 256]
+  decoder_channels: [128, 64, 32]
+  dropout_rate: 0.1
+
+training:
+  epochs: 50
+  batch_size: 8
+  learning_rate: 0.001
+  lr_scheduler: "cosine"          # cosine annealing
+  weight_decay: 0.0001
+  optimizer: "adam"
+  clip_grad_norm: 1.0
+
+loss:
+  quality_weight: 1.0             # BCE loss
+  angle_weight: 1.0               # cosine loss
+  width_weight: 0.5               # smooth L1 loss
+
+evaluation:
+  iou_threshold: 0.25             # standard Cornell threshold
+  angle_threshold: 30             # degrees
+  # Occlusion levels to test at evaluation
+  occlusion_levels: [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
