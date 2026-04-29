@@ -1,98 +1,123 @@
-#!/bin/bash
-# scripts/download_cornell.sh
-# ----------------------------
-# Download and extract the Cornell Grasping Dataset.
-# No registration required — publicly available.
-#
-# Usage:
-#     bash scripts/download_cornell.sh
-#
-# What it does:
-#   1. Downloads CornellGraspingDataset.zip (~500 MB)
-#   2. Extracts into data/raw/cornell/
-#   3. Verifies the structure
+#!/usr/bin/env bash
+set -euo pipefail
 
-set -e
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DATA_DIR="${ROOT_DIR}/data/raw"
+TARGET_DIR="${DATA_DIR}/cornell"
+TMP_DIR="${DATA_DIR}/_tmp_cornell_download"
+ZIP_PATH="${TMP_DIR}/cornell.zip"
 
-DATA_DIR="data/raw/cornell"
-ZIP_FILE="data/raw/CornellGraspingDataset.zip"
-URL="https://www.cs.cornell.edu/home/ahadi/CornellGraspingDataset.zip"
+mkdir -p "${DATA_DIR}"
+rm -rf "${TMP_DIR}"
+mkdir -p "${TMP_DIR}"
 
-echo "================================================="
-echo "  Cornell Grasping Dataset Downloader"
-echo "================================================="
-echo ""
+if [ -d "${TARGET_DIR}" ]; then
+  echo "[INFO] Cornell dataset directory already exists:"
+  echo "       ${TARGET_DIR}"
+  echo "[INFO] Remove it first if you want to re-download."
+  exit 0
+fi
 
-mkdir -p data/raw
+download_ok=0
 
-# ── Check if already downloaded ──────────────────────────────
-if [ -d "$DATA_DIR" ] && [ "$(ls -A $DATA_DIR)" ]; then
-    DEPTH_COUNT=$(find "$DATA_DIR" -name "*d.tiff" -o -name "*d.png" 2>/dev/null | wc -l)
-    LABEL_COUNT=$(find "$DATA_DIR" -name "*cpos.txt" 2>/dev/null | wc -l)
-    if [ "$DEPTH_COUNT" -gt 0 ] && [ "$LABEL_COUNT" -gt 0 ]; then
-        echo "  ✓ Cornell data already present:"
-        echo "    Depth images : $DEPTH_COUNT"
-        echo "    Label files  : $LABEL_COUNT"
-        echo ""
-        echo "  Skipping download. To re-download, delete data/raw/cornell/ first."
-        exit 0
+try_download() {
+  local url="$1"
+  echo "[INFO] Trying: ${url}"
+  if command -v curl >/dev/null 2>&1; then
+    if curl -L --fail --retry 3 --retry-delay 2 -o "${ZIP_PATH}" "${url}"; then
+      return 0
     fi
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    if wget -O "${ZIP_PATH}" "${url}"; then
+      return 0
+    fi
+  fi
+  return 1
+}
+
+# Candidate mirrors.
+# Keep this list short and easy to maintain.
+URLS=(
+  "https://github.com/skumra/robotic-grasping/raw/master/data/cornell/data.zip"
+)
+
+for url in "${URLS[@]}"; do
+  if try_download "${url}"; then
+    download_ok=1
+    break
+  else
+    echo "[WARN] Failed: ${url}"
+    rm -f "${ZIP_PATH}"
+  fi
+done
+
+if [ "${download_ok}" -ne 1 ]; then
+  echo
+  echo "[ERROR] Could not download the Cornell dataset automatically."
+  echo
+  echo "Please do one of the following:"
+  echo "  1. Download it manually from a working mirror."
+  echo "  2. Place the extracted dataset under:"
+  echo "       ${TARGET_DIR}"
+  echo
+  echo "Expected files look like:"
+  echo "  pcd0100r.png"
+  echo "  pcd0100d.tiff"
+  echo "  pcd0100cpos.txt"
+  echo "  pcd0100cneg.txt"
+  echo
+  exit 1
 fi
 
-# ── Download ──────────────────────────────────────────────────
-echo "  Downloading (~500 MB)..."
-echo "  URL: $URL"
-echo ""
+echo "[INFO] Download finished."
 
-if command -v wget &> /dev/null; then
-    wget -c -q --show-progress "$URL" -O "$ZIP_FILE"
-elif command -v curl &> /dev/null; then
-    curl -L -C - --progress-bar "$URL" -o "$ZIP_FILE"
+if ! command -v unzip >/dev/null 2>&1; then
+  echo "[ERROR] unzip is not installed."
+  echo "Install it, then extract manually:"
+  echo "  unzip ${ZIP_PATH} -d ${TMP_DIR}"
+  exit 1
+fi
+
+echo "[INFO] Extracting archive..."
+unzip -q "${ZIP_PATH}" -d "${TMP_DIR}"
+
+# Try to locate the extracted dataset root.
+# We look for a directory containing Cornell-style files.
+CANDIDATE_DIR="$(find "${TMP_DIR}" -type f \( -name '*cpos.txt' -o -name '*cneg.txt' \) | head -n 1 | xargs -r dirname)"
+
+if [ -z "${CANDIDATE_DIR}" ]; then
+  echo "[ERROR] Downloaded archive does not look like a Cornell dataset."
+  echo "Please inspect: ${TMP_DIR}"
+  exit 1
+fi
+
+# Move the nearest useful parent into final location.
+# If archive extracted to data/, rename it to cornell.
+DATA_PARENT="${TMP_DIR}/data"
+if [ -d "${DATA_PARENT}" ]; then
+  mv "${DATA_PARENT}" "${TARGET_DIR}"
 else
-    echo "  ERROR: Neither wget nor curl found. Install one and retry."
-    exit 1
+  mkdir -p "${TARGET_DIR}"
+  cp -r "${TMP_DIR}/." "${TARGET_DIR}/"
 fi
 
-echo ""
-echo "  ✓ Download complete."
-
-# ── Extract ───────────────────────────────────────────────────
-echo "  Extracting..."
-mkdir -p "$DATA_DIR"
-unzip -q "$ZIP_FILE" -d data/raw/
-
-# The zip extracts to a folder — rename it to 'cornell' if needed
-EXTRACTED=$(find data/raw -maxdepth 1 -mindepth 1 -type d | grep -v cornell | head -1)
-if [ -n "$EXTRACTED" ] && [ "$EXTRACTED" != "$DATA_DIR" ]; then
-    mv "$EXTRACTED" "$DATA_DIR"
+# Flatten one nested level if needed.
+if [ -d "${TARGET_DIR}/data" ] && [ ! -f "${TARGET_DIR}/pcd0100cpos.txt" ]; then
+  shopt -s dotglob nullglob
+  mv "${TARGET_DIR}/data/"* "${TARGET_DIR}/"
+  rmdir "${TARGET_DIR}/data" || true
+  shopt -u dotglob nullglob
 fi
 
-# Remove zip file to save space
-rm -f "$ZIP_FILE"
+rm -rf "${TMP_DIR}"
 
-echo "  ✓ Extracted to $DATA_DIR"
+echo "[INFO] Cornell dataset prepared at:"
+echo "       ${TARGET_DIR}"
+echo
 
-# ── Verify ────────────────────────────────────────────────────
-echo ""
-echo "  Verifying..."
-DEPTH_COUNT=$(find "$DATA_DIR" -name "*d.tiff" -o -name "*d.png" 2>/dev/null | wc -l)
-LABEL_COUNT=$(find "$DATA_DIR" -name "*cpos.txt" 2>/dev/null | wc -l)
-RGB_COUNT=$(find "$DATA_DIR" -name "*r.png" 2>/dev/null | wc -l)
-
-echo "    RGB images   : $RGB_COUNT"
-echo "    Depth images : $DEPTH_COUNT"
-echo "    Label files  : $LABEL_COUNT"
-
-if [ "$DEPTH_COUNT" -gt 0 ] && [ "$LABEL_COUNT" -gt 0 ]; then
-    echo ""
-    echo "  ✓ Cornell dataset ready."
-    echo ""
-    echo "  Next step: python train.py --config configs/baseline.yaml"
-else
-    echo ""
-    echo "  ✗ WARNING: Dataset may be incomplete."
-    echo "    Expected ~885 depth images and ~885 label files."
-    echo "    Try running this script again."
-fi
-
-echo "================================================="
+echo "[INFO] Quick verification:"
+find "${TARGET_DIR}" -maxdepth 1 -type f | head -n 10 || true
+echo
+echo "[INFO] To verify annotation files:"
+echo "  find ${TARGET_DIR} -name '*cpos.txt' | head"
