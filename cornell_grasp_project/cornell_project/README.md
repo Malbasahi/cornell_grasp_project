@@ -92,7 +92,7 @@ python evaluate.py --config configs/robust.yaml   --checkpoint checkpoints/robus
 
 **Download** (no registration required):
 ```
-https://www.cs.cornell.edu/home/ahadi/CornellGraspingDataset.zip
+bash scripts/download_cornell.sh
 ```
 
 ~500 MB. Contains 885 images of 240 household objects.
