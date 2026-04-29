@@ -125,8 +125,8 @@ A predicted grasp is **correct** if:
 | Member              | Role                                      |
 |---------------------|-------------------------------------------|
 | Marwah              | Data pipeline, evaluation, OSI metric     |
-| Merium Fazal Abbasi | Model training, augmentation experiments  |
-| Farah Alharthi      | Occlusion head, report, visualisations    |
+| Rawda               | Model training, augmentation experiments  |
+| Ayah                | Occlusion head, report, visualisations    |
 
 ---
 
